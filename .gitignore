@@ -18,3 +18,12 @@
 !/LICENSE
 !/README.md
 !/settings.gradle
+
+!/1.14
+!/1.15
+!/1.2.5
+!/b1.7.3
+
+/*/build
+/*/run
+/*/out

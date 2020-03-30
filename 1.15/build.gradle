@@ -1,0 +1,8 @@
+apply plugin: 'fabric-loom'
+
+dependencies {
+	compile project(":")
+
+	minecraft "com.mojang:minecraft:19w40a"
+	mappings "net.fabricmc:yarn:19w40a+build.1"
+}

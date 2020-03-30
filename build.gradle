@@ -1,3 +1,9 @@
+buildscript {
+	dependencies {
+		classpath "net.fabricmc:fabric-loom:0.2.6-SNAPSHOT"
+	}
+}
+
 import com.google.gson.Gson
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
@@ -8,7 +14,6 @@ plugins {
 
 	id 'idea'
 	id 'eclipse'
-	id("fabric-loom") version "0.2.6-SNAPSHOT"
 }
 
 sourceCompatibility = 1.8
@@ -20,27 +25,26 @@ archivesBaseName = "fabric-loader"
 def ENV = System.getenv()
 version = version + "+" + (ENV.BUILD_NUMBER ? ("build." + ENV.BUILD_NUMBER) : "local")
 
-repositories {
-	mavenCentral()
-	jcenter()
-	maven {
-		name = 'Fabric'
-		url = 'http://maven.modmuss50.me/'
-	}
-	maven {
-		name = 'SpongePowered'
-		url = 'http://repo.spongepowered.org/maven'
-	}
-	maven {
-		name = 'mojang'
-		url = 'https://libraries.minecraft.net/'
+allprojects {
+	repositories {
+		mavenCentral()
+		jcenter()
+		maven {
+			name = 'Fabric'
+			url = 'https://maven.fabricmc.net'
+		}
+		maven {
+			name = 'SpongePowered'
+			url = 'http://repo.spongepowered.org/maven'
+		}
+		maven {
+			name = 'mojang'
+			url = 'https://libraries.minecraft.net/'
+		}
 	}
 }
 
 dependencies {
-	minecraft "com.mojang:minecraft:1.14.4"
-	mappings "net.fabricmc:yarn:1.14.4+build.1"
-
 	// Minecraft's JAR uses these annotations
 	compile 'com.google.code.findbugs:jsr305:3.0.2'
 
@@ -66,6 +70,14 @@ dependencies {
 		transitive = false
 	}
 	compile 'net.sf.jopt-simple:jopt-simple:5.0.3'
+
+	compile 'org.apache.logging.log4j:log4j-core:2.8.1'
+
+	compile 'com.google.code.gson:gson:2.8.6'
+	compile group: 'com.google.guava', name: 'guava', version: '28.2-jre'
+
+
+
 }
 
 processResources {
@@ -89,14 +101,14 @@ jar {
 	}
 }
 
-task copyJson(type: Copy, dependsOn: ["remapJar"]) {
+task copyJson(type: Copy, dependsOn: ["jar"]) {
 	from('src/main/resources/fabric-installer.json') {
 		rename { "${archivesBaseName}-${version}.json" }
 	}
 	into 'build/libs'
 }
 
-task copyJsonLw(type: Copy, dependsOn: ["remapJar"]) {
+task copyJsonLw(type: Copy, dependsOn: ["jar"]) {
 	from('src/main/resources/fabric-installer.launchwrapper.json') {
 		rename { "${archivesBaseName}-${version}.launchwrapper.json" }
 	}
@@ -140,16 +152,16 @@ publishing {
 		mavenJava(MavenPublication) {
 			// add all the jars that should be included when publishing to maven
 			artifact(file("${project.buildDir}/libs/$archivesBaseName-${version}.jar")) {
-				builtBy remapJar
+				builtBy jar
 			}
 			artifact(sourcesJar) {
-				builtBy remapSourcesJar
+				builtBy sourcesJar
 			}
 			artifact(file('src/main/resources/fabric-installer.json')) {
-				builtBy remapJar
+				builtBy jar
 			}
 			artifact(file('src/main/resources/fabric-installer.launchwrapper.json')) {
-				builtBy remapJar
+				builtBy jar
 				classifier = "launchwrapper"
 			}
 		}

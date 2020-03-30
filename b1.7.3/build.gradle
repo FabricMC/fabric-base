@@ -1,0 +1,86 @@
+apply plugin: 'java'
+
+import groovy.json.JsonSlurper
+import org.apache.commons.io.FileUtils
+import org.apache.commons.io.IOUtils
+
+import java.nio.charset.StandardCharsets
+
+def getVersionManifest(String minecraftVersion) {
+	def manifest = new JsonSlurper().parseText(IOUtils.toString(new URL("https://launchermeta.mojang.com/mc/game/version_manifest.json"), StandardCharsets.UTF_8))
+	def url = manifest.versions.stream().filter({it.id.equals(minecraftVersion)}).findFirst().orElse(null).url
+	return new JsonSlurper().parseText(IOUtils.toString(new URL(url), StandardCharsets.UTF_8))
+}
+
+def downloadLibs(manifest) {
+	def files = [];
+	manifest.libraries.forEach {lib ->
+		def artifact = lib.downloads.artifact
+		if(artifact == null) return
+
+		//Skip asm, as we need to use Fabric-Loaders newer version
+		if(artifact.url.contains("asm")) return
+
+		def libFile = new File(project.buildDir, "/minecraft/libs/" + artifact.path)
+		if(!libFile.exists()){
+			FileUtils.copyURLToFile(new URL(artifact.url), libFile)
+		}
+		files.add(libFile);
+	}
+	return files
+}
+
+def getDownload(manifest, distribution) {
+	def download = manifest.downloads[distribution]
+	def file = new File(project.buildDir, "/minecraft/downloads/" + download.url.substring(download.url.lastIndexOf("/") + 1))
+	if(!file.exists()){
+		FileUtils.copyURLToFile(new URL(download.url), file)
+	}
+	return file
+}
+
+def getNatives(manifest) {
+	//TODO extract natives based on the system, for now just extract them to here
+	return new File(project.buildDir, "/minecraft/natives/")
+}
+
+def manifest = getVersionManifest("b1.7.3")
+
+repositories {
+	maven {
+		name = 'Mojang'
+		url = 'https://libraries.minecraft.net/'
+	}
+}
+
+sourceSets {
+	client
+	server
+}
+
+dependencies {
+	clientCompile project(":")
+	serverCompile project(":")
+
+	def libs = downloadLibs(manifest)
+	libs.forEach {
+		clientCompile fileTree(it)
+	}
+
+	clientCompile fileTree(getDownload(manifest, "client"))
+}
+
+task runClient(type: JavaExec) {
+	main = "net.fabricmc.loader.launch.knot.KnotClient"
+	classpath = sourceSets.client.runtimeClasspath
+
+	args "--gameDir", file("run").absolutePath
+	systemProperty 'java.library.path', getNatives(manifest).absolutePath
+}
+
+task runServer(type: JavaExec) {
+	main = "net.fabricmc.loader.launch.knot.KnotServer"
+	classpath = sourceSets.server.runtimeClasspath
+
+	args "--gameDir", file("run").absolutePath
+}

@@ -11,7 +11,7 @@ pipeline {
 
       stage ('Build') {
          steps {
-            sh "./gradlew build --refresh-dependencies --stacktrace"
+            sh "./gradlew :build --refresh-dependencies --stacktrace"
 
             archiveArtifacts artifacts: '**/build/libs/*.jar', fingerprint: true
          }
@@ -22,7 +22,7 @@ pipeline {
             branch 'master'
          }
          steps {
-            sh "./gradlew publish --stacktrace"
+            sh "./gradlew :publish --stacktrace"
          }
       }
    }

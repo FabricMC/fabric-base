@@ -1,0 +1,9 @@
+{
+  "id": "test",
+  "name": "Test Mod",
+  "version": "1.0.0",
+  "side": "client",
+  "initializers": [
+    "net.fabricmc.test.TestMod"
+  ]
+}
