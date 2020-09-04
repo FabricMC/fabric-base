@@ -44,6 +44,10 @@
       {
         "name": "org.ow2.asm:asm-util:8.0",
         "url": "https://maven.fabricmc.net/"
+      },
+      {
+        "name": "net.minecrell:terminalconsoleappender:1.2.0",
+        "url": "https://repo1.maven.org/maven2/"
       }
     ],
     "server": [

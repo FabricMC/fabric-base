@@ -65,7 +65,7 @@ public class FabricLoader implements net.fabricmc.loader.api.FabricLoader {
 	@Deprecated
 	public static final FabricLoader INSTANCE = new FabricLoader();
 
-	protected static Logger LOGGER = LogManager.getFormatterLogger("Fabric|Loader");
+	protected static Logger LOGGER = LogManager.getFormatterLogger("FabricLoader");
 
 	protected final Map<String, ModContainer> modMap = new HashMap<>();
 	protected List<ModContainer> mods = new ArrayList<>();

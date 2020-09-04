@@ -23,7 +23,7 @@ public final class EntrypointBranding {
 	public static final String FABRIC = "fabric";
 	public static final String VANILLA = "vanilla";
 
-	private static final Logger LOGGER = LogManager.getLogger("Fabric|Branding");
+	private static final Logger LOGGER = LogManager.getLogger("FabricLoader");
 
 	private EntrypointBranding() {
 	}

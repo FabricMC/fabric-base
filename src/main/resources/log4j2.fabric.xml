@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration status="WARN" packages="com.mojang.util,net.minecrell.terminalconsole.util">
+	<Appenders>
+
+		<!--	System out	-->
+		<Console name="SysOut" target="SYSTEM_OUT">
+			<PatternLayout>
+				<LoggerNamePatternSelector defaultPattern="%style{[%d{HH:mm:ss}]}{blue} %highlight{[%t/%level]}{FATAL=red, ERROR=red, WARN=yellow, INFO=green, DEBUG=green, TRACE=blue} %style{(%logger{1})}{cyan} %highlight{%msg%n}{FATAL=red, ERROR=red, WARN=normal, INFO=normal, DEBUG=normal, TRACE=normal}">
+					<!-- Dont show the logger name for minecraft classes-->
+					<PatternMatch key="net.minecraft.,com.mojang." pattern="%style{[%d{HH:mm:ss}]}{blue} %highlight{[%t/%level]}{FATAL=red, ERROR=red, WARN=yellow, INFO=green, DEBUG=green, TRACE=blue} %style{(Minecraft)}{cyan} %highlight{%msg%n}{FATAL=red, ERROR=red, WARN=normal, INFO=normal, DEBUG=normal, TRACE=normal}"/>
+				</LoggerNamePatternSelector>
+			</PatternLayout>
+		</Console>
+
+		<!--	Vanilla server gui	-->
+		<Queue name="ServerGuiConsole" ignoreExceptions="true">
+			<PatternLayout>
+				<LoggerNamePatternSelector defaultPattern="[%d{HH:mm:ss} %level] (%logger{1}) %msg%n">
+					<!-- Dont show the logger name for minecraft classes-->
+					<PatternMatch key="net.minecraft.,com.mojang." pattern="[%d{HH:mm:ss} %level] %msg%n"/>
+				</LoggerNamePatternSelector>
+			</PatternLayout>
+		</Queue>
+
+		<!--	latest.log same as vanilla	-->
+		<RollingRandomAccessFile name="LatestFile" fileName="logs/latest.log" filePattern="logs/%d{yyyy-MM-dd}-%i.log.gz">
+			<PatternLayout>
+				<LoggerNamePatternSelector defaultPattern="[%d{HH:mm:ss}] [%t/%level] (%logger{1}) %msg%n">
+					<!-- Dont show the logger name for minecraft classes-->
+					<PatternMatch key="net.minecraft.,com.mojang." pattern="[%d{HH:mm:ss}] [%t/%level] (Minecraft) %msg%n"/>
+				</LoggerNamePatternSelector>
+			</PatternLayout>
+			<Policies>
+				<TimeBasedTriggeringPolicy />
+				<OnStartupTriggeringPolicy />
+			</Policies>
+		</RollingRandomAccessFile>
+
+		<!--	Debug log file	-->
+		<RollingRandomAccessFile name="DebugFile" fileName="logs/debug.log" filePattern="logs/debug-%i.log.gz">
+			<PatternLayout pattern="[%d{HH:mm:ss}] [%t/%level] (%logger) %msg%n" />
+
+			<!--	Keep 5 files max	-->
+			<DefaultRolloverStrategy max="5" fileIndex="min"/>
+			
+			<Policies>
+				<SizeBasedTriggeringPolicy size="500MB"/>
+				<OnStartupTriggeringPolicy />
+			</Policies>
+
+		</RollingRandomAccessFile>
+	</Appenders>
+	<Loggers>
+		<Logger level="${sys:fabric.log.level:-info}" name="net.minecraft"/>
+		<Root level="all">
+			<AppenderRef ref="DebugFile" level="${sys:fabric.log.debug.level:-debug}"/>
+			<AppenderRef ref="SysOut" level="${sys:fabric.log.level:-info}"/>
+			<AppenderRef ref="LatestFile" level="${sys:fabric.log.level:-info}"/>
+			<AppenderRef ref="ServerGuiConsole" level="${sys:fabric.log.level:-info}"/>
+		</Root>
+	</Loggers>
+</Configuration>

@@ -37,7 +37,7 @@ public final class FabricMixinBootstrap {
 
 	}
 
-	protected static Logger LOGGER = LogManager.getFormatterLogger("Fabric|MixinBootstrap");
+	protected static Logger LOGGER = LogManager.getFormatterLogger("FabricMixinBootstrap");
 	private static boolean initialized = false;
 
 	static void addConfiguration(String configuration) {

@@ -43,7 +43,7 @@ import java.util.Collection;
 import java.util.List;
 
 public abstract class FabricTweaker extends FabricLauncherBase implements ITweaker {
-	protected static Logger LOGGER = LogManager.getFormatterLogger("Fabric|Tweaker");
+	protected static Logger LOGGER = LogManager.getFormatterLogger("FabricLoader");
 	protected String[] arguments;
 	private LaunchClassLoader launchClassLoader;
 	private boolean isDevelopment;
