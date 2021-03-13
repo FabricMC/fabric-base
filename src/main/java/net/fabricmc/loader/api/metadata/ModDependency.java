@@ -16,6 +16,7 @@
 
 package net.fabricmc.loader.api.metadata;
 
+import java.util.Optional;
 import java.util.Set;
 
 import net.fabricmc.loader.api.Version;
@@ -29,6 +30,16 @@ public interface ModDependency {
 	 * Returns the ID of the mod to check.
 	 */
 	String getModId();
+
+	/**
+	 * @return the reason for the mod dependency.
+	 */
+	Optional<String> getReason();
+
+	/**
+	 * @return the mod environment in which this dependency applies.
+	 */
+	ModEnvironment getEnvironment();
 
 	/**
 	 * Returns if the version fulfills this dependency's version requirement.

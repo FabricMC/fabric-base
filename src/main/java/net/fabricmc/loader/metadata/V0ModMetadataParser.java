@@ -371,7 +371,8 @@ final class V0ModMetadataParser {
 				throw new ParseMetadataException("Expected version to be a string or array", reader);
 			}
 
-			dependencies.put(modId, new ModDependencyImpl(modId, versionMatchers));
+			// V0 does not support environment dependencies or dependency reasons
+			dependencies.put(modId, new ModDependencyImpl(modId, ModEnvironment.UNIVERSAL, null, versionMatchers));
 		}
 
 		reader.endObject();

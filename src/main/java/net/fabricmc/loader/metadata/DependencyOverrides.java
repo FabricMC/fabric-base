@@ -18,6 +18,7 @@ package net.fabricmc.loader.metadata;
 
 import net.fabricmc.loader.FabricLoader;
 import net.fabricmc.loader.api.metadata.ModDependency;
+import net.fabricmc.loader.api.metadata.ModEnvironment;
 import net.fabricmc.loader.lib.gson.JsonReader;
 import net.fabricmc.loader.lib.gson.JsonToken;
 
@@ -111,55 +112,18 @@ public final class DependencyOverrides {
 				throw new ParseMetadataException(key + " is not an allowed dependency key, must be one of: " + String.join(", ", ALLOWED_KEYS), reader);
 			}
 
-			containersMap.put(key, readDependenciesContainer(reader));
+			final Map<String, ModDependency> dependencies = new HashMap<>();
+			V1ModMetadataParser.readDependenciesContainer(reader, dependencies);
+
+			containersMap.put(key, dependencies);
 		}
 
 		reader.endObject();
 		return containersMap;
 	}
 
-	private static Map<String, ModDependency> readDependenciesContainer(JsonReader reader) throws IOException, ParseMetadataException {
-		if (reader.peek() != JsonToken.BEGIN_OBJECT) {
-			throw new ParseMetadataException("Dependency container must be an object!", reader);
-		}
-
-		Map<String, ModDependency> modDependencyMap = new HashMap<>();
-		reader.beginObject();
-
-		while (reader.hasNext()) {
-			final String modId = reader.nextName();
-			final List<String> matcherStringList = new ArrayList<>();
-
-			switch (reader.peek()) {
-				case STRING:
-					matcherStringList.add(reader.nextString());
-					break;
-				case BEGIN_ARRAY:
-					reader.beginArray();
-
-					while (reader.hasNext()) {
-						if (reader.peek() != JsonToken.STRING) {
-							throw new ParseMetadataException("Dependency version range array must only contain string values", reader);
-						}
-
-						matcherStringList.add(reader.nextString());
-					}
-
-					reader.endArray();
-					break;
-				default:
-					throw new ParseMetadataException("Dependency version range must be a string or string array!", reader);
-			}
-
-			modDependencyMap.put(modId, new ModDependencyImpl(modId, matcherStringList));
-		}
-
-		reader.endObject();
-		return modDependencyMap;
-	}
-
 	public Map<String, ModDependency> getActiveDependencyMap(String key, String modId, Map<String, ModDependency> defaultMap) {
-		if(!exists) {
+		if (!exists) {
 			return defaultMap;
 		}
 

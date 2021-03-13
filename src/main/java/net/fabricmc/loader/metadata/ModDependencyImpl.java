@@ -17,27 +17,45 @@
 package net.fabricmc.loader.metadata;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
+
+import org.jetbrains.annotations.Nullable;
 
 import net.fabricmc.loader.api.Version;
 import net.fabricmc.loader.api.VersionParsingException;
 import net.fabricmc.loader.api.VersionPredicate;
 import net.fabricmc.loader.api.metadata.ModDependency;
+import net.fabricmc.loader.api.metadata.ModEnvironment;
 import net.fabricmc.loader.util.version.VersionPredicateParser;
 
 final class ModDependencyImpl implements ModDependency {
 	private final String modId;
+	private final ModEnvironment environment;
+	private final String reason;
 	private final List<String> matcherStringList;
 	private Set<VersionPredicate> ranges;
 
-	ModDependencyImpl(String modId, List<String> matcherStringList) {
+	ModDependencyImpl(String modId, ModEnvironment environment, @Nullable String reason, List<String> matcherStringList) {
 		this.modId = modId;
+		this.environment = environment;
+		this.reason = reason;
 		this.matcherStringList = matcherStringList;
 	}
 
 	@Override
 	public String getModId() {
 		return this.modId;
+	}
+
+	@Override
+	public Optional<String> getReason() {
+		return Optional.ofNullable(this.reason);
+	}
+
+	@Override
+	public ModEnvironment getEnvironment() {
+		return this.environment;
 	}
 
 	@Override

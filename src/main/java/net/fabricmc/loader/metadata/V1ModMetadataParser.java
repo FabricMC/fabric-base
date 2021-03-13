@@ -46,7 +46,7 @@ final class V1ModMetadataParser {
 	 * @param logger the logger to print warnings to
 	 * @param reader the json reader to read the file with
 	 * @return the metadata of this file, null if the file could not be parsed
-	 * @throws IOException         if there was any issue reading the file
+	 * @throws IOException if there was any issue reading the file
 	 */
 	static LoaderModMetadata parse(Logger logger, JsonReader reader) throws IOException, ParseMetadataException {
 		List<ParseWarning> warnings = new ArrayList<>();
@@ -434,7 +434,7 @@ final class V1ModMetadataParser {
 		reader.endArray();
 	}
 
-	private static void readDependenciesContainer(JsonReader reader, Map<String, ModDependency> modDependencies) throws IOException, ParseMetadataException {
+	static void readDependenciesContainer(JsonReader reader, Map<String, ModDependency> modDependencies) throws IOException, ParseMetadataException {
 		if (reader.peek() != JsonToken.BEGIN_OBJECT) {
 			throw new ParseMetadataException("Dependency container must be an object!", reader);
 		}
@@ -444,6 +444,9 @@ final class V1ModMetadataParser {
 		while (reader.hasNext()) {
 			final String modId = reader.nextName();
 			final List<String> matcherStringList = new ArrayList<>();
+			/* @Nullable */
+			String reason = null;
+			ModEnvironment environment = ModEnvironment.UNIVERSAL;
 
 			switch (reader.peek()) {
 			case STRING:
@@ -462,11 +465,62 @@ final class V1ModMetadataParser {
 
 				reader.endArray();
 				break;
+			case BEGIN_OBJECT:
+				reader.beginObject();
+
+				while (reader.hasNext()) {
+					final String key = reader.nextName();
+
+					switch (key) {
+					case "versions":
+						switch (reader.peek()) {
+						case STRING: // Single version predicate
+							matcherStringList.add(reader.nextString());
+							break;
+						case BEGIN_ARRAY: // Multiple version predicates
+							reader.beginArray();
+
+							while (reader.hasNext()) {
+								if (reader.peek() != JsonToken.STRING) {
+									throw new ParseMetadataException(String.format("Entry in version predicate array for %s must only contain strings", modId));
+								}
+
+								matcherStringList.add(reader.nextString());
+							}
+
+							reader.endArray();
+							break;
+						default:
+							throw new ParseMetadataException(String.format("Versions value in dependency for %s must be an array of versions or a single version as a string", modId), reader);
+						}
+
+						break;
+					case "reason":
+						if (reader.peek() != JsonToken.STRING) {
+							throw new ParseMetadataException(String.format("Reason value in dependency for %s must be a string", modId), reader);
+						}
+
+						reason = reader.nextString();
+
+						break;
+					case "environment":
+						if (reader.peek() != JsonToken.STRING) {
+							throw new ParseMetadataException(String.format("Environment in dependency for %s must be a string", modId), reader);
+						}
+
+						environment = readEnvironment(reader);
+					default:
+						throw new ParseMetadataException(String.format("Invalid field %s in dependency for %s", key, modId), reader);
+					}
+				}
+
+				reader.endObject();
+				break;
 			default:
 				throw new ParseMetadataException("Dependency version range must be a string or string array!", reader);
 			}
 
-			modDependencies.put(modId, new ModDependencyImpl(modId, matcherStringList));
+			modDependencies.put(modId, new ModDependencyImpl(modId, environment, reason, matcherStringList));
 		}
 
 		reader.endObject();

@@ -20,6 +20,7 @@ import com.google.common.jimfs.Configuration;
 import com.google.common.jimfs.Jimfs;
 import com.google.common.jimfs.PathType;
 
+import net.fabricmc.api.EnvType;
 import net.fabricmc.loader.FabricLoader;
 import net.fabricmc.loader.api.metadata.ModDependency;
 import net.fabricmc.loader.game.GameProvider.BuiltinMod;
@@ -91,7 +92,7 @@ public class ModResolver {
 	}
 
 	// TODO: Find a way to sort versions of mods by suggestions and conflicts (not crucial, though)
-	public Map<String, ModCandidate> findCompatibleSet(Logger logger, Map<String, ModCandidateSet> modCandidateSetMap) throws ModResolutionException {
+	public Map<String, ModCandidate> findCompatibleSet(Logger logger, EnvType envType, Map<String, ModCandidateSet> modCandidateSetMap) throws ModResolutionException {
 		// First, map all ModCandidateSets to Set<ModCandidate>s.
 		boolean isAdvanced = false;
 		Map<String, List<ModCandidate>> modCandidateMap = new HashMap<>();
@@ -165,7 +166,11 @@ public class ModResolver {
 					for (ModDependency dep : mod.getInfo().getDepends()) {
 						int[] matchingCandidates = modCandidateMap.getOrDefault(dep.getModId(), Collections.emptyList())
 							.stream()
-							.filter((c) -> dep.matches(c.getInfo().getVersion()))
+							.filter((c) -> {
+								// Consider the environment in which the dependency needs to apply.
+								// If the dependency does not apply in the current environment type - then evaluate so the dependency is true
+								return !dep.getEnvironment().matches(envType) && dep.matches(c.getInfo().getVersion());
+							})
 							.mapToInt(candidateIntMap::get)
 							.toArray();
 
@@ -364,9 +369,9 @@ public class ModResolver {
 				appendUnsatisfiedDependencyError(errors, dependency, depCandidate);
 			} else if (errorType.contains("conf")) {
 				// CONFLICTS WITH
-				appendConflictError(errors, candidate, depCandidate);
+				appendConflictError(errors, candidate, depCandidate, dependency);
 			} else {
-				appendBreakingError(errors, candidate, depCandidate);
+				appendBreakingError(errors, candidate, depCandidate, dependency);
 			}
 			if (depCandidate != null) {
 				appendJiJInfo(errors, result, depCandidate);
@@ -378,15 +383,30 @@ public class ModResolver {
 		errors.append("which is missing!");
 		errors.append("\n\t - You must install ").append(getDependencyVersionRequirements(dependency)).append(" of ")
 				.append(dependency.getModId()).append(".");
+
+		dependency.getReason().ifPresent(reason -> {
+			errors.append("\nThe following reason was provided why you must install ")
+					.append(dependency.getModId())
+					.append(":")
+					.append("\n")
+					.append(reason);
+		});
 	}
 
 	private void appendUnsatisfiedDependencyError(StringBuilder errors, ModDependency dependency, ModCandidate depCandidate) {
 		errors.append("but a non-matching version is present: ").append(getCandidateFriendlyVersion(depCandidate)).append("!");
 		errors.append("\n\t - You must install ").append(getDependencyVersionRequirements(dependency)).append(" of ")
 				.append(getCandidateName(depCandidate)).append(".");
+
+		dependency.getReason().ifPresent(reason -> {
+			errors.append("\nThe following reason was provided why you must install the required version of ")
+					.append(dependency.getModId())
+					.append(":\n")
+					.append(reason);
+		});
 	}
 
-	private void appendConflictError(StringBuilder errors, ModCandidate candidate, ModCandidate depCandidate) {
+	private void appendConflictError(StringBuilder errors, ModCandidate candidate, ModCandidate depCandidate, ModDependency dependency) {
 		final String depCandidateVer = getCandidateFriendlyVersion(depCandidate);
 		errors.append("but a matching version is present: ").append(depCandidateVer).append("!");
 		errors.append("\n\t - While this won't prevent you from starting the game,");
@@ -394,15 +414,37 @@ public class ModResolver {
 		errors.append(" have found that version ").append(depCandidateVer).append(" of ").append(getCandidateName(depCandidate));
 		errors.append(" conflicts with their mod.");
 		errors.append("\n\t - It is heavily recommended to remove one of the mods.");
+
+		dependency.getReason().ifPresent(reason -> {
+			errors.append("\nThe following reason was provided why ")
+					.append(depCandidateVer)
+					.append(" of ")
+					.append(getCandidateName(depCandidate))
+					.append(" may conflict with ")
+					.append(getCandidateName(candidate))
+					.append(":\n")
+					.append(reason);
+		});
 	}
 
-	private void appendBreakingError(StringBuilder errors, ModCandidate candidate, ModCandidate depCandidate) {
+	private void appendBreakingError(StringBuilder errors, ModCandidate candidate, ModCandidate depCandidate, ModDependency dependency) {
 		final String depCandidateVer = getCandidateFriendlyVersion(depCandidate);
 		errors.append("but a matching version is present: ").append(depCandidate.getInfo().getVersion()).append("!");
 		errors.append("\n\t - The developer(s) of ").append(getCandidateName(candidate));
 		errors.append(" have found that version ").append(depCandidateVer).append(" of ").append(getCandidateName(depCandidate));
 		errors.append(" critically conflicts with their mod.");
 		errors.append("\n\t - You must remove one of the mods.");
+
+		dependency.getReason().ifPresent(reason -> {
+			errors.append("\nThe following reason was provided why ")
+					.append(depCandidateVer)
+					.append(" of ")
+					.append(getCandidateName(depCandidate))
+					.append(" may break in the presence of ")
+					.append(getCandidateName(candidate))
+					.append(":\n")
+					.append(reason);
+		});
 	}
 
 	private void appendJiJInfo(StringBuilder errors, Map<String, ModCandidate> result, ModCandidate candidate) {
@@ -784,7 +826,7 @@ public class ModResolver {
 		}
 
 		long time2 = System.currentTimeMillis();
-		Map<String, ModCandidate> result = findCompatibleSet(loader.getLogger(), candidatesById);
+		Map<String, ModCandidate> result = findCompatibleSet(loader.getLogger(), loader.getEnvironmentType(), candidatesById);
 
 		long time3 = System.currentTimeMillis();
 		loader.getLogger().debug("Mod resolution detection time: " + (time2 - time1) + "ms");
