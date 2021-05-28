@@ -19,6 +19,7 @@ package net.fabricmc.loader.launch.common;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.loader.FabricLoader;
 import net.fabricmc.loader.api.ModContainer;
+import net.fabricmc.loader.api.metadata.ModMetadata;
 import net.fabricmc.loader.metadata.LoaderModMetadata;
 import net.fabricmc.loader.util.mappings.MixinIntermediaryDevRemapper;
 import net.fabricmc.mapping.tree.TinyTree;
@@ -29,6 +30,7 @@ import org.spongepowered.asm.mixin.MixinEnvironment;
 import org.spongepowered.asm.mixin.Mixins;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -40,17 +42,19 @@ public final class FabricMixinBootstrap {
 	protected static Logger LOGGER = LogManager.getFormatterLogger("Fabric|MixinBootstrap");
 	private static boolean initialized = false;
 
-	static void addConfiguration(String configuration) {
-		Mixins.addConfiguration(configuration);
+	static void addConfiguration(String modId, Set<String> configurations) {
+		Mixins.addConfigurations(modId, configurations.toArray(new String[0]));
 	}
 
-	static Set<String> getMixinConfigs(FabricLoader loader, EnvType type) {
+	static Map<String, Set<String>> getMixinConfigs(FabricLoader loader, EnvType type) {
 		return loader.getAllMods().stream()
 			.map(ModContainer::getMetadata)
 			.filter((m) -> m instanceof LoaderModMetadata)
-			.flatMap((m) -> ((LoaderModMetadata) m).getMixinConfigs(type).stream())
-			.filter(s -> s != null && !s.isEmpty())
-			.collect(Collectors.toSet());
+			.map((m) -> (LoaderModMetadata) m)
+			.collect(Collectors.toMap(ModMetadata::getId, modMetadata -> modMetadata.getMixinConfigs(type).stream()
+				.filter(s -> s != null && !s.isEmpty())
+				.collect(Collectors.toSet())
+			));
 	}
 
 	public static void init(EnvType side, FabricLoader loader) {
