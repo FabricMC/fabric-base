@@ -319,6 +319,7 @@ public class FabricLoader implements net.fabricmc.loader.api.FabricLoader {
 		}
 
 		if (!info.loadsInEnvironment(getEnvironmentType())) {
+			LOGGER.warn("Attempted to load mod {} in environment {}, it can only be loaded in environment type {}", info.getId(), getEnvironmentType(), info.getEnvironment());
 			return;
 		}
 
