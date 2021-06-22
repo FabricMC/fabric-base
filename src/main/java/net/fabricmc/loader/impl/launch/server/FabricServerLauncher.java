@@ -23,6 +23,11 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
+import java.util.Objects;
 import java.util.Properties;
 
 import net.fabricmc.loader.impl.launch.knot.KnotServer;
@@ -30,42 +35,28 @@ import net.fabricmc.loader.impl.util.SystemProperties;
 import net.fabricmc.loader.impl.util.UrlUtil;
 
 public class FabricServerLauncher {
-	private static final ClassLoader parentLoader = FabricServerLauncher.class.getClassLoader();
-	private static String mainClass = KnotServer.class.getName();
+	private static final ClassLoader PARENT_LOADER = FabricServerLauncher.class.getClassLoader();
+	private static final String INCLUDED_INSTALLER_META_PROPS_NAME = "fabric-server-meta.properties";
+	private static final String MAIN_CLASS = KnotServer.class.getName();
 
 	public static void main(String[] args) {
-		URL propUrl = parentLoader.getResource("fabric-server-launch.properties");
-
-		if (propUrl != null) {
-			Properties properties = new Properties();
-
-			try (InputStream is = propUrl.openStream()) {
-				properties.load(is);
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
-
-			if (properties.containsKey("launch.mainClass")) {
-				mainClass = properties.getProperty("launch.mainClass");
-			}
-		}
-
 		boolean dev = Boolean.parseBoolean(System.getProperty(SystemProperties.DEVELOPMENT, "false"));
 
-		if (!dev) {
-			try {
-				setup(args);
-			} catch (Exception e) {
-				throw new RuntimeException("Failed to setup Fabric server environment!", e);
-			}
-		} else {
-			launch(mainClass, FabricServerLauncher.class.getClassLoader(), args);
+		if (dev) {
+			launch(FabricServerLauncher.class.getClassLoader(), args);
+			return;
+		}
+
+		try {
+			setup(args);
+		} catch (Exception e) {
+			throw new RuntimeException("Failed to setup Fabric server environment!", e);
 		}
 	}
 
-	private static void launch(String mainClass, ClassLoader loader, String[] args) {
+	private static void launch(ClassLoader loader, String[] args) {
 		try {
-			Class<?> c = loader.loadClass(mainClass);
+			Class<?> c = loader.loadClass(FabricServerLauncher.MAIN_CLASS);
 			c.getMethod("main", String[].class).invoke(null, (Object) args);
 		} catch (Exception e) {
 			throw new RuntimeException("An exception occurred when launching the server!", e);
@@ -73,6 +64,27 @@ public class FabricServerLauncher {
 	}
 
 	private static void setup(String... runArguments) throws IOException {
+		File serverJar;
+
+		if (PARENT_LOADER.getResource(INCLUDED_INSTALLER_META_PROPS_NAME) != null) {
+			serverJar = getStampedServerJar();
+		} else {
+			serverJar = getServerJarFromProperties();
+		}
+
+		System.setProperty(SystemProperties.GAME_JAR_PATH, serverJar.getAbsolutePath());
+
+		try {
+			URLClassLoader newClassLoader = new InjectingURLClassLoader(new URL[] { FabricServerLauncher.class.getProtectionDomain().getCodeSource().getLocation(), UrlUtil.asUrl(serverJar) }, PARENT_LOADER, "com.google.common.jimfs.");
+			Thread.currentThread().setContextClassLoader(newClassLoader);
+			launch(newClassLoader, runArguments);
+		} catch (Exception ex) {
+			throw new RuntimeException(ex);
+		}
+	}
+
+	// Used with the full installer
+	private static File getServerJarFromProperties() throws IOException {
 		// Pre-load "fabric-server-launcher.properties"
 		File propertiesFile = new File("fabric-server-launcher.properties");
 		Properties properties = new Properties();
@@ -107,14 +119,49 @@ public class FabricServerLauncher {
 			throw new RuntimeException("Searched for '" + serverJar.getName() + "' but could not find it.");
 		}
 
-		System.setProperty(SystemProperties.GAME_JAR_PATH, serverJar.getAbsolutePath());
+		return serverJar;
+	}
 
-		try {
-			URLClassLoader newClassLoader = new InjectingURLClassLoader(new URL[] { FabricServerLauncher.class.getProtectionDomain().getCodeSource().getLocation(), UrlUtil.asUrl(serverJar) }, parentLoader, "com.google.common.jimfs.");
-			Thread.currentThread().setContextClassLoader(newClassLoader);
-			launch(mainClass, newClassLoader, runArguments);
-		} catch (Exception ex) {
-			throw new RuntimeException(ex);
+	// Stamped from meta, downloads the server jar
+	private static File getStampedServerJar() throws IOException {
+		Properties properties = new Properties();
+
+		try (InputStream is = PARENT_LOADER.getResource(INCLUDED_INSTALLER_META_PROPS_NAME).openStream()) {
+			properties.load(is);
+		} catch (IOException e) {
+			throw new IOException("Failed to read stamped installer data", e);
 		}
+
+		long serverSize = Long.parseLong(Objects.requireNonNull(properties.getProperty("server-size"), "No such property of name: server-size"));
+		String serverName = Objects.requireNonNull(properties.getProperty("server-name"), "No such property of name: server-name");
+
+		Path serverJar = Paths.get(".fabric", "server", serverName);
+		boolean valid = false;
+
+		if (Files.exists(serverJar)) {
+			long actualSize = Files.size(serverJar);
+			valid = actualSize == serverSize;
+
+			if (!valid) {
+				System.out.printf("Unexpected server file size, found %d bytes expected %d bytes%n", actualSize, serverSize);
+			}
+		}
+
+		if (!valid) {
+			String serverUrl = Objects.requireNonNull(properties.getProperty("server-url"), "No such property of name: server-url");
+			System.out.println("Downloading " + serverUrl);
+
+			try {
+				Files.createDirectories(serverJar.getParent());
+
+				try (InputStream is = new URL(serverUrl).openStream()) {
+					Files.copy(is, serverJar, StandardCopyOption.REPLACE_EXISTING);
+				}
+			} catch (IOException e) {
+				throw new IOException("Failed to download server from" + serverUrl);
+			}
+		}
+
+		return serverJar.toFile();
 	}
 }

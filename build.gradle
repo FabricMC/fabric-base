@@ -6,6 +6,7 @@ plugins {
 	id 'checkstyle'
 	id("org.cadixdev.licenser") version "0.5.0"
 	id("fabric-loom") version "0.7-SNAPSHOT"
+	id 'com.github.johnrengelman.shadow' version '7.0.0'
 }
 
 sourceCompatibility = 1.8
@@ -35,16 +36,24 @@ sourceSets {
 	}
 }
 
+configurations {
+	required
+	implementation {
+		extendsFrom required
+	}
+
+}
+
 dependencies {
 	minecraft "com.mojang:minecraft:1.16.4"
 	mappings "net.fabricmc:yarn:1.16.4+build.9:v2"
 
 	// fabric-loader dependencies
-	implementation "org.ow2.asm:asm:${project.asm_version}"
-	implementation "org.ow2.asm:asm-analysis:${project.asm_version}"
-	implementation "org.ow2.asm:asm-commons:${project.asm_version}"
-	implementation "org.ow2.asm:asm-tree:${project.asm_version}"
-	implementation "org.ow2.asm:asm-util:${project.asm_version}"
+	required "org.ow2.asm:asm:${project.asm_version}"
+	required "org.ow2.asm:asm-analysis:${project.asm_version}"
+	required "org.ow2.asm:asm-commons:${project.asm_version}"
+	required "org.ow2.asm:asm-tree:${project.asm_version}"
+	required "org.ow2.asm:asm-util:${project.asm_version}"
 
 	// Required for mixin annotation processor
 	annotationProcessor "org.ow2.asm:asm:${project.asm_version}"
@@ -53,16 +62,19 @@ dependencies {
 	annotationProcessor "org.ow2.asm:asm-tree:${project.asm_version}"
 	annotationProcessor "org.ow2.asm:asm-util:${project.asm_version}"
 
-	implementation('net.fabricmc:sponge-mixin:0.9.4+mixin.0.8.2') {
+	required('net.fabricmc:sponge-mixin:0.9.4+mixin.0.8.2') {
 		exclude module: 'launchwrapper'
 		exclude module: 'guava'
 	}
-	implementation 'net.fabricmc:tiny-mappings-parser:0.2.2.14'
-	implementation 'net.fabricmc:tiny-remapper:0.4.2'
-	implementation 'net.fabricmc:access-widener:1.0.0'
+	required 'net.fabricmc:tiny-mappings-parser:0.2.2.14'
+	required 'net.fabricmc:tiny-remapper:0.4.2'
+	required 'net.fabricmc:access-widener:1.0.0'
 
-	implementation 'com.google.jimfs:jimfs:1.2-fabric'
-	implementation 'net.fabricmc:fabric-loader-sat4j:2.3.5.4'
+	required 'com.google.jimfs:jimfs:1.2-fabric'
+	// TODO REMOVE ME!! by shading into jimfs
+	required 'com.google.guava:guava:30.1.1-jre'
+
+	required 'net.fabricmc:fabric-loader-sat4j:2.3.5.4'
 
 	// launchwrapper + dependencies
 	implementation ('net.minecraft:launchwrapper:1.12') {
@@ -102,6 +114,18 @@ jar {
 		rename { "${it}_${project.archivesBaseName}"}
 	}
 }
+
+// Builds the fat jar used for servers
+shadowJar {
+	archiveClassifier = "fat"
+	configurations = [project.configurations.required]
+	mergeServiceFiles()
+
+	manifest {
+		attributes 'Main-Class': 'net.fabricmc.loader.impl.launch.server.FabricServerLauncher'
+	}
+}
+build.dependsOn shadowJar
 
 // useful for creating test mod jar
 task testJar(type: Jar) {
