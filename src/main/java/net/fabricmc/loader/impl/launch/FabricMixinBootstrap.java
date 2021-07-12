@@ -28,12 +28,16 @@ import org.spongepowered.asm.mixin.MixinEnvironment;
 import org.spongepowered.asm.mixin.Mixins;
 
 import net.fabricmc.api.EnvType;
+import net.fabricmc.loader.api.SemanticVersion;
+import net.fabricmc.loader.api.metadata.ModDependency;
+import net.fabricmc.loader.api.metadata.ModDependency.Kind;
 import net.fabricmc.loader.impl.FabricLoaderImpl;
 import net.fabricmc.loader.impl.ModContainerImpl;
 import net.fabricmc.loader.impl.metadata.LoaderModMetadata;
 import net.fabricmc.loader.impl.util.log.Log;
 import net.fabricmc.loader.impl.util.log.LogCategory;
 import net.fabricmc.loader.impl.util.mappings.MixinIntermediaryDevRemapper;
+import net.fabricmc.loader.impl.util.version.SemanticVersionImpl;
 import net.fabricmc.mapping.tree.TinyTree;
 
 public final class FabricMixinBootstrap {
@@ -80,6 +84,7 @@ public final class FabricMixinBootstrap {
 				if (configs.isEmpty()) continue;
 
 				dataMap.put(FabricData.KEY_MOD_ID, metadata.getId());
+				dataMap.put(FabricData.KEY_COMPATIBILITY, getMixinCompat(mod));
 
 				for (String config : configs) {
 					addConfigurationFabric.invoke(null, config, dataMap);
@@ -96,5 +101,25 @@ public final class FabricMixinBootstrap {
 		}
 
 		initialized = true;
+	}
+
+	private static final SemanticVersion LAST_LOADER_MIXIN_0_9_2 = new SemanticVersionImpl(new int[] { 0, 11, 9999 }, null, null);
+
+	private static int getMixinCompat(ModContainerImpl mod) {
+		// TODO: check version recorded in the mod's manifest
+
+		// no manifest record, try to infer from loader dependency being >= 0.12.x (first with fabrix-mixin 0.9.4+)
+
+		for (ModDependency dep : mod.getMetadata().getDependencies()) {
+			if (dep.getKind() == Kind.DEPENDS && (dep.getModId().equals("fabricloader") || dep.getModId().equals("fabric-loader"))) {
+				if (!dep.matches(LAST_LOADER_MIXIN_0_9_2)) { // not satisfied by a loader version with the old mixin version
+					return FabricData.COMPATIBILITY_0_9_4;
+				}
+			}
+		}
+
+		// default to old fabric-mixin
+
+		return FabricData.COMPATIBILITY_0_9_2;
 	}
 }
