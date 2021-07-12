@@ -19,6 +19,7 @@ package net.fabricmc.loader.impl.launch.knot;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.Constructor;
 import java.net.JarURLConnection;
 import java.net.URISyntaxException;
 import java.net.URL;
@@ -74,7 +75,20 @@ class KnotClassDelegate {
 		if (transformInitialized) throw new IllegalStateException("Cannot initialize KnotClassDelegate twice!");
 
 		mixinTransformer = MixinServiceKnot.getTransformer();
-		if (mixinTransformer == null) throw new IllegalStateException("mixin transformer unavailable?");
+
+		if (mixinTransformer == null) {
+			try { // reflective instantiation for older mixin versions
+				@SuppressWarnings("unchecked")
+				Constructor<IMixinTransformer> ctor = (Constructor<IMixinTransformer>) Class.forName("org.spongepowered.asm.mixin.transformer.MixinTransformer").getConstructor();
+				ctor.setAccessible(true);
+				mixinTransformer = ctor.newInstance();
+			} catch (ReflectiveOperationException e) {
+				Log.debug(LogCategory.KNOT, "Can't create Mixin transformer through reflection (only applicable for 0.8-0.8.2): %s", e);
+
+				// both lookups failed (not received through IMixinService.offer and not found through reflection)
+				throw new IllegalStateException("mixin transformer unavailable?");
+			}
+		}
 
 		transformInitialized = true;
 	}
