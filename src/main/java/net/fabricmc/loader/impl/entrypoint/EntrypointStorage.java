@@ -104,7 +104,7 @@ public final class EntrypointStorage {
 
 		@Override
 		public String toString() {
-			return mod.getInfo().getId() + "->(0.3.x)" + value;
+			return mod.getMetadata().getId() + "->(0.3.x)" + value;
 		}
 
 		@SuppressWarnings("unchecked")
@@ -141,7 +141,7 @@ public final class EntrypointStorage {
 	}
 
 	public void addDeprecated(ModContainerImpl modContainer, String adapter, String value) throws ClassNotFoundException, LanguageAdapterException {
-		Log.debug(LogCategory.ENTRYPOINT, "Registering 0.3.x old-style initializer %s for mod %s", value, modContainer.getInfo().getId());
+		Log.debug(LogCategory.ENTRYPOINT, "Registering 0.3.x old-style initializer %s for mod %s", value, modContainer.getMetadata().getId());
 		OldEntry oe = new OldEntry(modContainer, adapter, value);
 		getOrCreateEntries("main").add(oe);
 		getOrCreateEntries("client").add(oe);
@@ -150,10 +150,10 @@ public final class EntrypointStorage {
 
 	public void add(ModContainerImpl modContainer, String key, EntrypointMetadata metadata, Map<String, LanguageAdapter> adapterMap) throws Exception {
 		if (!adapterMap.containsKey(metadata.getAdapter())) {
-			throw new Exception("Could not find adapter '" + metadata.getAdapter() + "' (mod " + modContainer.getInfo().getId() + "!)");
+			throw new Exception("Could not find adapter '" + metadata.getAdapter() + "' (mod " + modContainer.getMetadata().getId() + "!)");
 		}
 
-		Log.debug(LogCategory.ENTRYPOINT, "Registering new-style initializer %s for mod %s (key %s)", metadata.getValue(), modContainer.getInfo().getId(), key);
+		Log.debug(LogCategory.ENTRYPOINT, "Registering new-style initializer %s for mod %s (key %s)", metadata.getValue(), modContainer.getMetadata().getId(), key);
 		getOrCreateEntries(key).add(new NewEntry(
 				modContainer, adapterMap.get(metadata.getAdapter()), metadata.getValue()
 				));

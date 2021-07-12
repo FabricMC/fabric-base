@@ -16,17 +16,20 @@
 
 package net.fabricmc.loader.impl.launch;
 
+import java.lang.reflect.Method;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
-import java.util.Set;
-import java.util.stream.Collectors;
+import java.util.Map;
 
 import org.spongepowered.asm.launch.MixinBootstrap;
+import org.spongepowered.asm.mixin.FabricData;
 import org.spongepowered.asm.mixin.MixinEnvironment;
 import org.spongepowered.asm.mixin.Mixins;
 
 import net.fabricmc.api.EnvType;
-import net.fabricmc.loader.api.ModContainer;
 import net.fabricmc.loader.impl.FabricLoaderImpl;
+import net.fabricmc.loader.impl.ModContainerImpl;
 import net.fabricmc.loader.impl.metadata.LoaderModMetadata;
 import net.fabricmc.loader.impl.util.log.Log;
 import net.fabricmc.loader.impl.util.log.LogCategory;
@@ -37,19 +40,6 @@ public final class FabricMixinBootstrap {
 	private FabricMixinBootstrap() { }
 
 	private static boolean initialized = false;
-
-	static void addConfiguration(String configuration) {
-		Mixins.addConfiguration(configuration);
-	}
-
-	static Set<String> getMixinConfigs(FabricLoaderImpl loader, EnvType type) {
-		return loader.getAllMods().stream()
-				.map(ModContainer::getMetadata)
-				.filter((m) -> m instanceof LoaderModMetadata)
-				.flatMap((m) -> ((LoaderModMetadata) m).getMixinConfigs(type).stream())
-				.filter(s -> s != null && !s.isEmpty())
-				.collect(Collectors.toSet());
-	}
 
 	public static void init(EnvType side, FabricLoaderImpl loader) {
 		if (initialized) {
@@ -79,7 +69,32 @@ public final class FabricMixinBootstrap {
 		}
 
 		MixinBootstrap.init();
-		getMixinConfigs(loader, side).forEach(FabricMixinBootstrap::addConfiguration);
+
+		try {
+			Method addConfigurationFabric = Mixins.class.getMethod("addConfigurationFabric", String.class, Map.class);
+			Map<String, Object> dataMap = new HashMap<>();
+
+			for (ModContainerImpl mod : loader.getModsInternal()) {
+				LoaderModMetadata metadata = mod.getMetadata();
+				Collection<String> configs = metadata.getMixinConfigs(side);
+				if (configs.isEmpty()) continue;
+
+				dataMap.put(FabricData.KEY_MOD_ID, metadata.getId());
+
+				for (String config : configs) {
+					addConfigurationFabric.invoke(null, config, dataMap);
+				}
+			}
+		} catch (NoSuchMethodException e) { // fallback for non-fabric Mixin version
+			for (ModContainerImpl mod : loader.getModsInternal()) {
+				for (String config : mod.getMetadata().getMixinConfigs(side)) {
+					Mixins.addConfiguration(config);
+				}
+			}
+		} catch (ReflectiveOperationException e) {
+			throw new RuntimeException(e);
+		}
+
 		initialized = true;
 	}
 }
