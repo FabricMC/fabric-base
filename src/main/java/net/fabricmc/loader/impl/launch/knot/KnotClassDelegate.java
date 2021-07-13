@@ -19,6 +19,7 @@ package net.fabricmc.loader.impl.launch.knot;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.Constructor;
 import java.net.JarURLConnection;
 import java.net.URISyntaxException;
 import java.net.URL;
@@ -32,15 +33,18 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.jar.Manifest;
 
-import org.spongepowered.asm.mixin.transformer.FabricMixinTransformerProxy;
+import org.spongepowered.asm.mixin.transformer.IMixinTransformer;
 
 import net.fabricmc.api.EnvType;
 import net.fabricmc.loader.impl.game.GameProvider;
 import net.fabricmc.loader.impl.launch.FabricLauncherBase;
 import net.fabricmc.loader.impl.transformer.FabricTransformer;
 import net.fabricmc.loader.impl.util.FileSystemUtil;
+import net.fabricmc.loader.impl.util.ManifestUtil;
 import net.fabricmc.loader.impl.util.UrlConversionException;
 import net.fabricmc.loader.impl.util.UrlUtil;
+import net.fabricmc.loader.impl.util.log.Log;
+import net.fabricmc.loader.impl.util.log.LogCategory;
 
 class KnotClassDelegate {
 	static class Metadata {
@@ -60,7 +64,7 @@ class KnotClassDelegate {
 	private final GameProvider provider;
 	private final boolean isDevelopment;
 	private final EnvType envType;
-	private FabricMixinTransformerProxy mixinTransformer;
+	private IMixinTransformer mixinTransformer;
 	private boolean transformInitialized = false;
 
 	KnotClassDelegate(boolean isDevelopment, EnvType envType, KnotClassLoaderInterface itf, GameProvider provider) {
@@ -71,86 +75,93 @@ class KnotClassDelegate {
 	}
 
 	public void initializeTransformers() {
-		if (transformInitialized) {
-			throw new RuntimeException("Cannot initialize KnotClassDelegate twice!");
-		}
+		if (transformInitialized) throw new IllegalStateException("Cannot initialize KnotClassDelegate twice!");
 
-		mixinTransformer = new FabricMixinTransformerProxy();
+		mixinTransformer = MixinServiceKnot.getTransformer();
+
+		if (mixinTransformer == null) {
+			try { // reflective instantiation for older mixin versions
+				@SuppressWarnings("unchecked")
+				Constructor<IMixinTransformer> ctor = (Constructor<IMixinTransformer>) Class.forName("org.spongepowered.asm.mixin.transformer.MixinTransformer").getConstructor();
+				ctor.setAccessible(true);
+				mixinTransformer = ctor.newInstance();
+			} catch (ReflectiveOperationException e) {
+				Log.debug(LogCategory.KNOT, "Can't create Mixin transformer through reflection (only applicable for 0.8-0.8.2): %s", e);
+
+				// both lookups failed (not received through IMixinService.offer and not found through reflection)
+				throw new IllegalStateException("mixin transformer unavailable?");
+			}
+		}
 
 		transformInitialized = true;
 	}
 
-	private FabricMixinTransformerProxy getMixinTransformer() {
+	private IMixinTransformer getMixinTransformer() {
 		assert mixinTransformer != null;
 		return mixinTransformer;
 	}
 
 	Metadata getMetadata(String name, URL resourceURL) {
-		if (resourceURL != null) {
-			URL codeSourceURL = null;
-			String filename = name.replace('.', '/') + ".class";
+		if (resourceURL == null) return Metadata.EMPTY;
 
-			try {
-				codeSourceURL = UrlUtil.getSource(filename, resourceURL);
-			} catch (UrlConversionException e) {
-				System.err.println("Could not find code source for " + resourceURL + ": " + e.getMessage());
-			}
+		URL codeSourceUrl = null;
+		String filename = name.replace('.', '/') + ".class";
 
-			if (codeSourceURL != null) {
-				return metadataCache.computeIfAbsent(codeSourceURL.toString(), (codeSourceStr) -> {
-					Manifest manifest = null;
-					CodeSource codeSource = null;
-					Certificate[] certificates = null;
-					URL fCodeSourceUrl = null;
-
-					try {
-						fCodeSourceUrl = new URL(codeSourceStr);
-						Path path = UrlUtil.asPath(fCodeSourceUrl);
-
-						if (Files.isRegularFile(path)) {
-							URLConnection connection = new URL("jar:" + codeSourceStr + "!/").openConnection();
-
-							if (connection instanceof JarURLConnection) {
-								manifest = ((JarURLConnection) connection).getManifest();
-								certificates = ((JarURLConnection) connection).getCertificates();
-							}
-
-							if (manifest == null) {
-								try (FileSystemUtil.FileSystemDelegate jarFs = FileSystemUtil.getJarFileSystem(path, false)) {
-									Path manifestPath = jarFs.get().getPath("META-INF/MANIFEST.MF");
-
-									if (Files.exists(manifestPath)) {
-										try (InputStream stream = Files.newInputStream(manifestPath)) {
-											manifest = new Manifest(stream);
-
-											// TODO
-											/* JarEntry codeEntry = codeSourceJar.getJarEntry(filename);
-
-											if (codeEntry != null) {
-												codeSource = new CodeSource(codeSourceURL, codeEntry.getCodeSigners());
-											} */
-										}
-									}
-								}
-							}
-						}
-					} catch (IOException | FileSystemNotFoundException | URISyntaxException e) {
-						if (FabricLauncherBase.getLauncher().isDevelopment()) {
-							System.err.println("Failed to load manifest: " + e);
-							e.printStackTrace();
-						}
-					}
-
-					if (codeSource == null) {
-						codeSource = new CodeSource(fCodeSourceUrl, certificates);
-					}
-
-					return new Metadata(manifest, codeSource);
-				});
-			}
+		try {
+			codeSourceUrl = UrlUtil.getSource(filename, resourceURL);
+		} catch (UrlConversionException e) {
+			System.err.println("Could not find code source for " + resourceURL + ": " + e.getMessage());
 		}
 
-		return Metadata.EMPTY;
+		if (codeSourceUrl == null) return Metadata.EMPTY;
+
+		return getMetadata(codeSourceUrl);
+	}
+
+	Metadata getMetadata(URL codeSourceUrl) {
+		return metadataCache.computeIfAbsent(codeSourceUrl.toString(), (codeSourceStr) -> {
+			Manifest manifest = null;
+			CodeSource codeSource = null;
+			Certificate[] certificates = null;
+
+			try {
+				Path path = UrlUtil.asPath(codeSourceUrl);
+
+				if (Files.isDirectory(path)) {
+					manifest = ManifestUtil.readManifest(path);
+				} else {
+					URLConnection connection = new URL("jar:" + codeSourceStr + "!/").openConnection();
+
+					if (connection instanceof JarURLConnection) {
+						manifest = ((JarURLConnection) connection).getManifest();
+						certificates = ((JarURLConnection) connection).getCertificates();
+					}
+
+					if (manifest == null) {
+						try (FileSystemUtil.FileSystemDelegate jarFs = FileSystemUtil.getJarFileSystem(path, false)) {
+							manifest = ManifestUtil.readManifest(jarFs.get().getRootDirectories().iterator().next());
+						}
+					}
+
+					// TODO
+					/* JarEntry codeEntry = codeSourceJar.getJarEntry(filename);
+
+					if (codeEntry != null) {
+						codeSource = new CodeSource(codeSourceURL, codeEntry.getCodeSigners());
+					} */
+				}
+			} catch (IOException | FileSystemNotFoundException | URISyntaxException e) {
+				if (FabricLauncherBase.getLauncher().isDevelopment()) {
+					Log.warn(LogCategory.KNOT, "Failed to load manifest", e);
+				}
+			}
+
+			if (codeSource == null) {
+				codeSource = new CodeSource(codeSourceUrl, certificates);
+			}
+
+			return new Metadata(manifest, codeSource);
+		});
 	}
 
 	public byte[] getPostMixinClassByteArray(String name) {

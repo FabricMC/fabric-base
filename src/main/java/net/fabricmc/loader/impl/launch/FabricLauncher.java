@@ -21,6 +21,7 @@ import java.io.InputStream;
 import java.net.URL;
 import java.nio.file.Path;
 import java.util.Collection;
+import java.util.jar.Manifest;
 
 import net.fabricmc.api.EnvType;
 
@@ -44,6 +45,8 @@ public interface FabricLauncher {
 	 * @param runTransformers Whether to run all transformers <i>except mixin</i> on the class
 	 */
 	byte[] getClassByteArray(String name, boolean runTransformers) throws IOException;
+
+	Manifest getManifest(Path originPath);
 
 	boolean isDevelopment();
 

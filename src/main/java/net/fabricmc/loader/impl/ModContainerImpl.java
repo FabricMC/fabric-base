@@ -20,7 +20,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-import net.fabricmc.loader.api.metadata.ModMetadata;
 import net.fabricmc.loader.impl.metadata.LoaderModMetadata;
 import net.fabricmc.loader.impl.util.FileSystemUtil;
 import net.fabricmc.loader.impl.util.log.Log;
@@ -38,12 +37,12 @@ public class ModContainerImpl extends net.fabricmc.loader.ModContainer {
 	}
 
 	@Override
-	public ModMetadata getMetadata() {
+	public LoaderModMetadata getMetadata() {
 		return info;
 	}
 
 	@Override
-	protected Path getOriginPath() {
+	public Path getOriginPath() {
 		return originPath;
 	}
 
@@ -85,6 +84,7 @@ public class ModContainerImpl extends net.fabricmc.loader.ModContainer {
 		}
 	}
 
+	@Deprecated
 	@Override
 	public LoaderModMetadata getInfo() {
 		return info;

@@ -29,6 +29,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.jar.Manifest;
 import java.util.stream.Collectors;
 
 import org.spongepowered.asm.launch.MixinBootstrap;
@@ -232,6 +233,15 @@ public final class Knot extends FabricLauncherBase {
 			return classLoader.getDelegate().getPreMixinClassByteArray(name, false);
 		} else {
 			return classLoader.getDelegate().getRawClassByteArray(name, false);
+		}
+	}
+
+	@Override
+	public Manifest getManifest(Path originPath) {
+		try {
+			return classLoader.getDelegate().getMetadata(UrlUtil.asUrl(originPath)).manifest;
+		} catch (MalformedURLException e) {
+			throw new RuntimeException(e);
 		}
 	}
 
