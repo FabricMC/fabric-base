@@ -42,7 +42,7 @@ public class ModContainerImpl extends net.fabricmc.loader.ModContainer {
 	}
 
 	@Override
-	protected Path getOriginPath() {
+	public Path getOriginPath() {
 		return originPath;
 	}
 

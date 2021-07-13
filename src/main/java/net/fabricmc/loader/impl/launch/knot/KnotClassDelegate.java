@@ -40,8 +40,11 @@ import net.fabricmc.loader.impl.game.GameProvider;
 import net.fabricmc.loader.impl.launch.FabricLauncherBase;
 import net.fabricmc.loader.impl.transformer.FabricTransformer;
 import net.fabricmc.loader.impl.util.FileSystemUtil;
+import net.fabricmc.loader.impl.util.ManifestUtil;
 import net.fabricmc.loader.impl.util.UrlConversionException;
 import net.fabricmc.loader.impl.util.UrlUtil;
+import net.fabricmc.loader.impl.util.log.Log;
+import net.fabricmc.loader.impl.util.log.LogCategory;
 
 class KnotClassDelegate {
 	static class Metadata {
@@ -99,71 +102,66 @@ class KnotClassDelegate {
 	}
 
 	Metadata getMetadata(String name, URL resourceURL) {
-		if (resourceURL != null) {
-			URL codeSourceURL = null;
-			String filename = name.replace('.', '/') + ".class";
+		if (resourceURL == null) return Metadata.EMPTY;
 
-			try {
-				codeSourceURL = UrlUtil.getSource(filename, resourceURL);
-			} catch (UrlConversionException e) {
-				System.err.println("Could not find code source for " + resourceURL + ": " + e.getMessage());
-			}
+		URL codeSourceUrl = null;
+		String filename = name.replace('.', '/') + ".class";
 
-			if (codeSourceURL != null) {
-				return metadataCache.computeIfAbsent(codeSourceURL.toString(), (codeSourceStr) -> {
-					Manifest manifest = null;
-					CodeSource codeSource = null;
-					Certificate[] certificates = null;
-					URL fCodeSourceUrl = null;
-
-					try {
-						fCodeSourceUrl = new URL(codeSourceStr);
-						Path path = UrlUtil.asPath(fCodeSourceUrl);
-
-						if (Files.isRegularFile(path)) {
-							URLConnection connection = new URL("jar:" + codeSourceStr + "!/").openConnection();
-
-							if (connection instanceof JarURLConnection) {
-								manifest = ((JarURLConnection) connection).getManifest();
-								certificates = ((JarURLConnection) connection).getCertificates();
-							}
-
-							if (manifest == null) {
-								try (FileSystemUtil.FileSystemDelegate jarFs = FileSystemUtil.getJarFileSystem(path, false)) {
-									Path manifestPath = jarFs.get().getPath("META-INF/MANIFEST.MF");
-
-									if (Files.exists(manifestPath)) {
-										try (InputStream stream = Files.newInputStream(manifestPath)) {
-											manifest = new Manifest(stream);
-
-											// TODO
-											/* JarEntry codeEntry = codeSourceJar.getJarEntry(filename);
-
-											if (codeEntry != null) {
-												codeSource = new CodeSource(codeSourceURL, codeEntry.getCodeSigners());
-											} */
-										}
-									}
-								}
-							}
-						}
-					} catch (IOException | FileSystemNotFoundException | URISyntaxException e) {
-						if (FabricLauncherBase.getLauncher().isDevelopment()) {
-							System.err.println("Failed to load manifest: " + e);
-							e.printStackTrace();
-						}
-					}
-
-					if (codeSource == null) {
-						codeSource = new CodeSource(fCodeSourceUrl, certificates);
-					}
-
-					return new Metadata(manifest, codeSource);
-				});
-			}
+		try {
+			codeSourceUrl = UrlUtil.getSource(filename, resourceURL);
+		} catch (UrlConversionException e) {
+			System.err.println("Could not find code source for " + resourceURL + ": " + e.getMessage());
 		}
 
-		return Metadata.EMPTY;
+		if (codeSourceUrl == null) return Metadata.EMPTY;
+
+		return getMetadata(codeSourceUrl);
+	}
+
+	Metadata getMetadata(URL codeSourceUrl) {
+		return metadataCache.computeIfAbsent(codeSourceUrl.toString(), (codeSourceStr) -> {
+			Manifest manifest = null;
+			CodeSource codeSource = null;
+			Certificate[] certificates = null;
+
+			try {
+				Path path = UrlUtil.asPath(codeSourceUrl);
+
+				if (Files.isDirectory(path)) {
+					manifest = ManifestUtil.readManifest(path);
+				} else {
+					URLConnection connection = new URL("jar:" + codeSourceStr + "!/").openConnection();
+
+					if (connection instanceof JarURLConnection) {
+						manifest = ((JarURLConnection) connection).getManifest();
+						certificates = ((JarURLConnection) connection).getCertificates();
+					}
+
+					if (manifest == null) {
+						try (FileSystemUtil.FileSystemDelegate jarFs = FileSystemUtil.getJarFileSystem(path, false)) {
+							manifest = ManifestUtil.readManifest(jarFs.get().getRootDirectories().iterator().next());
+						}
+					}
+
+					// TODO
+					/* JarEntry codeEntry = codeSourceJar.getJarEntry(filename);
+
+					if (codeEntry != null) {
+						codeSource = new CodeSource(codeSourceURL, codeEntry.getCodeSigners());
+					} */
+				}
+			} catch (IOException | FileSystemNotFoundException | URISyntaxException e) {
+				if (FabricLauncherBase.getLauncher().isDevelopment()) {
+					Log.warn(LogCategory.KNOT, "Failed to load manifest", e);
+				}
+			}
+
+			if (codeSource == null) {
+				codeSource = new CodeSource(codeSourceUrl, certificates);
+			}
+
+			return new Metadata(manifest, codeSource);
+		});
 	}
 
 	public byte[] getPostMixinClassByteArray(String name) {

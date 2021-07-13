@@ -26,12 +26,14 @@ import java.net.JarURLConnection;
 import java.net.MalformedURLException;
 import java.net.URISyntaxException;
 import java.net.URL;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.jar.JarEntry;
 import java.util.jar.JarInputStream;
+import java.util.jar.Manifest;
 
 import org.spongepowered.asm.launch.MixinBootstrap;
 import org.spongepowered.asm.mixin.MixinEnvironment;
@@ -51,6 +53,8 @@ import net.fabricmc.loader.impl.game.minecraft.MinecraftGameProvider;
 import net.fabricmc.loader.impl.launch.FabricLauncherBase;
 import net.fabricmc.loader.impl.launch.FabricMixinBootstrap;
 import net.fabricmc.loader.impl.util.Arguments;
+import net.fabricmc.loader.impl.util.FileSystemUtil;
+import net.fabricmc.loader.impl.util.ManifestUtil;
 import net.fabricmc.loader.impl.util.SystemProperties;
 import net.fabricmc.loader.impl.util.UrlUtil;
 import net.fabricmc.loader.impl.util.log.Log;
@@ -212,6 +216,22 @@ public abstract class FabricTweaker extends FabricLauncherBase implements ITweak
 		}
 
 		return classBytes;
+	}
+
+	@Override
+	public Manifest getManifest(Path originPath) {
+		try {
+			if (Files.isDirectory(originPath)) {
+				return ManifestUtil.readManifest(originPath);
+			} else {
+				try (FileSystemUtil.FileSystemDelegate jarFs = FileSystemUtil.getJarFileSystem(originPath, false)) {
+					return ManifestUtil.readManifest(jarFs.get().getRootDirectories().iterator().next());
+				}
+			}
+		} catch (IOException e) {
+			Log.warn(LOG_CATEGORY, "Error reading Manifest", e);
+			return null;
+		}
 	}
 
 	// By default the remapped jar will be on the classpath after the obfuscated one.
