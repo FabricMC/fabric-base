@@ -19,8 +19,15 @@ package net.fabricmc.loader.impl;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+import java.util.Optional;
 
+import net.fabricmc.loader.api.ModContainer;
 import net.fabricmc.loader.api.metadata.ModMetadata;
+import net.fabricmc.loader.impl.discovery.ModCandidate;
 import net.fabricmc.loader.impl.metadata.LoaderModMetadata;
 import net.fabricmc.loader.impl.util.FileSystemUtil;
 import net.fabricmc.loader.impl.util.log.Log;
@@ -30,11 +37,22 @@ import net.fabricmc.loader.impl.util.log.LogCategory;
 public class ModContainerImpl extends net.fabricmc.loader.ModContainer {
 	private final LoaderModMetadata info;
 	private final Path originPath;
+	private final String parentModId;
+	private final Collection<String> childModIds;
+
 	private volatile Path root;
 
-	public ModContainerImpl(LoaderModMetadata info, Path originPath) {
-		this.info = info;
-		this.originPath = originPath;
+	public ModContainerImpl(ModCandidate candidate) {
+		this.info = candidate.getMetadata();
+		this.originPath = candidate.getPath();
+		this.parentModId = candidate.getParentMods().isEmpty() ? null : candidate.getParentMods().iterator().next().getId();
+		this.childModIds = candidate.getNestedMods().isEmpty() ? Collections.emptyList() : new ArrayList<>(candidate.getNestedMods().size());
+
+		for (ModCandidate c : candidate.getNestedMods()) {
+			if (c.getParentMods().size() <= 1 || c.getParentMods().iterator().next() == candidate) {
+				childModIds.add(c.getId());
+			}
+		}
 	}
 
 	@Override
@@ -83,6 +101,25 @@ public class ModContainerImpl extends net.fabricmc.loader.ModContainer {
 		} catch (IOException e) {
 			throw new RuntimeException("Failed to find root directory for mod '" + info.getId() + "'!", e);
 		}
+	}
+
+	@Override
+	public Optional<ModContainer> getContainingMod() {
+		return parentModId != null ? FabricLoaderImpl.INSTANCE.getModContainer(parentModId) : Optional.empty();
+	}
+
+	@Override
+	public Collection<ModContainer> getContainedMods() {
+		if (childModIds.isEmpty()) return Collections.emptyList();
+
+		List<ModContainer> ret = new ArrayList<>(childModIds.size());
+
+		for (String id : childModIds) {
+			ModContainer mod = FabricLoaderImpl.INSTANCE.getModContainer(id).orElse(null);
+			if (mod != null) ret.add(mod);
+		}
+
+		return ret;
 	}
 
 	@Override

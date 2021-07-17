@@ -337,13 +337,11 @@ public final class FabricLoaderImpl extends net.fabricmc.loader.FabricLoader {
 	}
 
 	private void addMod(ModCandidate candidate) throws ModResolutionException {
-		LoaderModMetadata info = candidate.getMetadata();
-
-		ModContainerImpl container = new ModContainerImpl(info, candidate.getPath());
+		ModContainerImpl container = new ModContainerImpl(candidate);
 		mods.add(container);
-		modMap.put(info.getId(), container);
+		modMap.put(candidate.getId(), container);
 
-		for (String provides : info.getProvides()) {
+		for (String provides : candidate.getProvides()) {
 			modMap.put(provides, container);
 		}
 	}

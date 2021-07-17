@@ -17,6 +17,8 @@
 package net.fabricmc.loader.api;
 
 import java.nio.file.Path;
+import java.util.Collection;
+import java.util.Optional;
 
 import net.fabricmc.loader.api.metadata.ModMetadata;
 
@@ -61,4 +63,18 @@ public interface ModContainer {
 		Path root = getRootPath();
 		return root.resolve(file.replace("/", root.getFileSystem().getSeparator()));
 	}
+
+	/**
+	 * Get the mod containing this mod (nested jar parent).
+	 *
+	 * @return mod containing this mod or empty if not nested
+	 */
+	Optional<ModContainer> getContainingMod();
+
+	/**
+	 * Get the active mods contained within this mod (nested jar children).
+	 *
+	 * @return active contained mods within this mod's jar
+	 */
+	Collection<ModContainer> getContainedMods();
 }
